@@ -16,7 +16,6 @@ repos:
     hooks:
       - id: go-fmt
       - id: go-vet
-        args: ["./..."]
       - id: go-mod-tidy
       - id: go-build
         args: ["./cmd/crated"]
