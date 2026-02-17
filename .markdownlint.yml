@@ -1,0 +1,17 @@
+# markdownlint configuration
+# https://github.com/DavidAnson/markdownlint
+
+# Disable line length — not practical for docs with URLs, tables, badges
+MD013: false
+
+# Allow inline HTML — needed for centered badges in README
+MD033: false
+
+# Allow first line to not be h1 — PR template starts with h2, README uses HTML
+MD041: false
+
+# Allow emphasis as heading in templates
+MD036: false
+
+# Allow bare URLs for email addresses
+MD034: false

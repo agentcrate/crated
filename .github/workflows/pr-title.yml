@@ -1,0 +1,54 @@
+name: PR Title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            test
+            chore
+            refactor
+            perf
+            ci
+            build
+            style
+            revert
+          scopes: |
+            runtime
+            models
+            providers
+            gemini
+            docker
+            deps
+            release
+            ci
+            build
+            docs
+            test
+            security
+          requireScope: false
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            PR title must follow Conventional Commits format:
+            type(scope): description
+
+            Examples:
+              feat(runtime): add OpenAI provider
+              fix(models): handle missing API key gracefully
+              docs: update Docker build instructions
+              chore(deps): bump ADK to v0.5.0

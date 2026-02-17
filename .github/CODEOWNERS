@@ -1,0 +1,17 @@
+# Default owners for everything in the repo
+* @agentcrate/maintainers
+
+# Binary entrypoint
+/cmd/ @agentcrate/maintainers
+
+# Core runtime
+/internal/ @agentcrate/maintainers
+
+# Container image
+/Dockerfile @agentcrate/maintainers
+
+# CI/CD
+/.github/ @agentcrate/maintainers
+
+# Documentation
+*.md @agentcrate/maintainers
