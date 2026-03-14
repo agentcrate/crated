@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/adk/agent"
@@ -36,6 +37,7 @@ type Runtime struct {
 	toolsets []tool.Toolset
 	closers  []func() // cleanup functions for stdio processes, etc.
 	logger   *slog.Logger
+	mu       sync.RWMutex // protects agent for hot-reload
 }
 
 // New creates a Runtime from a parsed Agentfile and optional runtime config.
@@ -126,7 +128,10 @@ func (r *Runtime) Init(ctx context.Context) error {
 }
 
 // Agent returns the configured ADK agent. Must be called after Init().
+// Safe for concurrent use during hot-reload.
 func (r *Runtime) Agent() agent.Agent {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.agent
 }
 
@@ -138,6 +143,49 @@ func (r *Runtime) Agentfile() *agentfile.Agentfile {
 // Models returns the model registry. Must be called after Init().
 func (r *Runtime) Models() *ModelRegistry {
 	return r.models
+}
+
+// Reload updates the runtime with a new Agentfile. It recreates the ADK
+// agent with the new persona/brain config while keeping existing skill
+// connections alive. This is called on SIGHUP for dev hot-reload.
+//
+// Only persona and brain changes are safe to reload — skill or build
+// changes require a full container restart.
+func (r *Runtime) Reload(ctx context.Context, newAF *agentfile.Agentfile) error {
+	r.logger.Info("reloading agent config",
+		"old_prompt_len", len(r.af.Persona.SystemPrompt),
+		"new_prompt_len", len(newAF.Persona.SystemPrompt),
+	)
+
+	// Resolve the default model. If brain config changed, try the new default.
+	defaultModel, err := r.models.Default()
+	if err != nil {
+		return fmt.Errorf("resolving default model: %w", err)
+	}
+
+	// Recreate the agent with the new instruction but existing toolsets.
+	a, err := llmagent.New(llmagent.Config{
+		Name:        newAF.Metadata.Name,
+		Description: newAF.Metadata.Description,
+		Model:       defaultModel,
+		Instruction: newAF.Persona.SystemPrompt,
+		Toolsets:    r.toolsets,
+	})
+	if err != nil {
+		return fmt.Errorf("creating reloaded agent: %w", err)
+	}
+
+	// Swap the agent atomically.
+	r.mu.Lock()
+	r.agent = a
+	r.af = newAF
+	r.mu.Unlock()
+
+	r.logger.Info("agent config reloaded",
+		"agent", newAF.Metadata.Name,
+	)
+
+	return nil
 }
 
 // Close shuts down all skill connections and subprocess handles.
