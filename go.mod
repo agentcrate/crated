@@ -7,7 +7,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 	google.golang.org/adk v0.6.0
-	google.golang.org/genai v1.46.0
+	google.golang.org/genai v1.50.0
 )
 
 require (
