@@ -68,6 +68,12 @@ func (p *provider) CreateModel(_ context.Context, modelID string, cc runtime.Con
 
 	logger := slog.Default().With("provider", "openai", "model", modelID)
 
+	// Fail early if the API key is missing for cloud endpoints.
+	// Local providers (Ollama, vLLM) don't need one.
+	if apiKey == "" && base == defaultBaseURL {
+		return nil, fmt.Errorf("%s is not set — required for model %q (set it in your environment or use --env-file)", keyEnv, modelID)
+	}
+
 	return &openaiModel{
 		modelID: modelID,
 		apiKey:  apiKey,

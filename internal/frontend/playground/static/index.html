@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentCrate Playground</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <header class="topbar">
+        <div class="topbar-brand">
+            <svg class="brand-logo" width="24" height="24" viewBox="0 0 127 128" fill="none"
+                xmlns="http://www.w3.org/2000/svg">
+                <path
+                    d="M84.5488 10.3332C91.7649 13.3173 98.526 17.7412 104.392 23.6066C109.779 28.9936 113.951 35.1361 116.907 41.6926C107.958 48.0003 95.5067 47.1524 87.501 39.1467C79.6712 31.3164 78.6865 19.2322 84.5488 10.3332Z"
+                    fill="#1A27A8" />
+                <path
+                    d="M87.5011 6.71655C96.4565 -2.2389 110.976 -2.23885 119.932 6.71655C128.887 15.672 128.887 30.1917 119.932 39.1472C118.982 40.0969 117.969 40.9448 116.907 41.6931C113.951 35.1363 109.779 28.9934 104.392 23.6062C98.5263 17.741 91.7657 13.3168 84.5499 10.3328C85.3922 9.05422 86.3761 7.84155 87.5011 6.71655Z"
+                    fill="#9977FF" />
+                <path
+                    d="M17.9106 23.6075C35.9263 5.59218 62.3857 1.16756 84.5493 10.3331C78.6868 19.2323 79.6714 31.3163 87.5015 39.1466C95.5071 47.1522 107.958 47.9999 116.907 41.6925C127.058 64.2017 122.886 91.5956 104.392 110.09C80.5109 133.971 41.7918 133.97 17.9106 110.089C-5.97018 86.2078 -5.97018 47.4887 17.9106 23.6075ZM88.1772 39.8224C73.2516 24.8971 49.0522 24.8971 34.1265 39.8224C19.2007 54.7482 19.2007 78.9483 34.1265 93.8741C49.0522 108.799 73.2516 108.799 88.1772 93.8741C103.103 78.9484 103.103 54.7481 88.1772 39.8224Z"
+                    fill="#326CE5" />
+            </svg>
+            <span class="brand-name">AgentCrate</span>
+            <span class="brand-badge">Playground</span>
+        </div>
+        <div class="topbar-actions">
+            <button class="stats-toggle" id="statsToggle" title="Toggle stats panel">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Stats
+            </button>
+            <div class="topbar-status" id="status">
+                <span class="status-dot"></span>
+                <span class="status-text">Connecting…</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <main class="chat-container">
+            <div class="messages" id="messages">
+                <div class="welcome">
+                    <svg class="welcome-logo" width="64" height="64" viewBox="0 0 127 128" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M84.5488 10.3332C91.7649 13.3173 98.526 17.7412 104.392 23.6066C109.779 28.9936 113.951 35.1361 116.907 41.6926C107.958 48.0003 95.5067 47.1524 87.501 39.1467C79.6712 31.3164 78.6865 19.2322 84.5488 10.3332Z"
+                            fill="#1A27A8" />
+                        <path
+                            d="M87.5011 6.71655C96.4565 -2.2389 110.976 -2.23885 119.932 6.71655C128.887 15.672 128.887 30.1917 119.932 39.1472C118.982 40.0969 117.969 40.9448 116.907 41.6931C113.951 35.1363 109.779 28.9934 104.392 23.6062C98.5263 17.741 91.7657 13.3168 84.5499 10.3328C85.3922 9.05422 86.3761 7.84155 87.5011 6.71655Z"
+                            fill="#9977FF" />
+                        <path
+                            d="M17.9106 23.6075C35.9263 5.59218 62.3857 1.16756 84.5493 10.3331C78.6868 19.2323 79.6714 31.3163 87.5015 39.1466C95.5071 47.1522 107.958 47.9999 116.907 41.6925C127.058 64.2017 122.886 91.5956 104.392 110.09C80.5109 133.971 41.7918 133.97 17.9106 110.089C-5.97018 86.2078 -5.97018 47.4887 17.9106 23.6075ZM88.1772 39.8224C73.2516 24.8971 49.0522 24.8971 34.1265 39.8224C19.2007 54.7482 19.2007 78.9483 34.1265 93.8741C49.0522 108.799 73.2516 108.799 88.1772 93.8741C103.103 78.9484 103.103 54.7481 88.1772 39.8224Z"
+                            fill="#326CE5" />
+                    </svg>
+                    <h2>AgentCrate Playground</h2>
+                    <p>Chat with your agent in real time.</p>
+                </div>
+            </div>
+
+            <form class="input-bar" id="inputForm">
+                <textarea id="messageInput" placeholder="Send a message…" rows="1" autofocus></textarea>
+                <button type="submit" id="sendBtn" disabled>
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </form>
+        </main>
+
+        <aside class="stats-panel" id="statsPanel">
+            <div class="stats-header">
+                <h3>Session Stats</h3>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Tokens</div>
+                    <div class="stat-value" id="statTotalTokens">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Prompt</div>
+                    <div class="stat-value stat-small" id="statPromptTokens">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Completion</div>
+                    <div class="stat-value stat-small" id="statCompletionTokens">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Messages</div>
+                    <div class="stat-value stat-small" id="statMessages">0</div>
+                </div>
+            </div>
+
+            <div class="stats-section">
+                <div class="stat-label">Avg Response Time</div>
+                <div class="stat-value stat-small" id="statAvgTime">—</div>
+            </div>
+
+            <div class="stats-section">
+                <div class="stat-label">Tokens Over Time</div>
+                <canvas id="tokenChart" width="240" height="100"></canvas>
+            </div>
+
+            <div class="stats-section">
+                <div class="stat-label">Session Duration</div>
+                <div class="stat-value stat-small" id="statDuration">0:00</div>
+            </div>
+        </aside>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

@@ -39,6 +39,7 @@ import (
 	_ "github.com/agentcrate/crated/internal/runtime/providers/openai"
 
 	// Register frontends — each init() adds to the frontend registry.
+	_ "github.com/agentcrate/crated/internal/frontend/playground"
 	_ "github.com/agentcrate/crated/internal/frontend/repl"
 )
 
@@ -142,9 +143,6 @@ func run(agentfilePath, profileFlag, runtimeCfgFlag, frontendName string, health
 		}()
 	}
 
-	// 2. Listen for SIGHUP to reload config.
-	go handleSIGHUP(logger)
-
 	// 3. Parse and validate the Agentfile.
 	data, err := os.ReadFile(agentfilePath)
 	if err != nil {
@@ -193,6 +191,9 @@ func run(agentfilePath, profileFlag, runtimeCfgFlag, frontendName string, health
 		return fmt.Errorf("initializing runtime: %w", err)
 	}
 
+	// Start SIGHUP handler now that runtime is ready.
+	go handleSIGHUP(ctx, logger, agentfilePath, profileName, rt)
+
 	// 7. Mark ready — readiness probe now returns 200.
 	if hs != nil {
 		hs.MarkReady()
@@ -224,12 +225,55 @@ func resolveProfile(flagValue string) string {
 	return os.Getenv("CRATE_PROFILE")
 }
 
-// handleSIGHUP logs when SIGHUP is received. This is a placeholder for
-// future config hot-reload functionality.
-func handleSIGHUP(logger *slog.Logger) {
+// handleSIGHUP listens for SIGHUP and hot-reloads the Agentfile into
+// the running runtime. Only persona/brain changes take effect — skill
+// or build changes require a full container restart.
+func handleSIGHUP(ctx context.Context, logger *slog.Logger, agentfilePath, profileName string, rt *runtime.Runtime) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGHUP)
-	for range ch {
-		logger.Info("received SIGHUP, config reload not yet implemented")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ch:
+			logger.Info("received SIGHUP, reloading Agentfile", "path", agentfilePath)
+
+			data, err := os.ReadFile(agentfilePath)
+			if err != nil {
+				logger.Error("reload failed: reading agentfile", "error", err)
+				continue
+			}
+
+			result, err := agentfile.Parse(data)
+			if err != nil {
+				logger.Error("reload failed: parsing agentfile", "error", err)
+				continue
+			}
+			if !result.IsValid() {
+				for _, e := range result.Errors {
+					logger.Error("reload validation error", "field", e.Field, "message", e.Message)
+				}
+				logger.Error("reload failed: validation errors", "count", len(result.Errors))
+				continue
+			}
+
+			af := result.Agentfile
+			if profileName != "" {
+				resolved, err := agentfile.ResolveProfile(af, profileName)
+				if err != nil {
+					logger.Error("reload failed: resolving profile", "error", err)
+					continue
+				}
+				af = resolved
+			}
+
+			if err := rt.Reload(ctx, af); err != nil {
+				logger.Error("reload failed", "error", err)
+				continue
+			}
+
+			logger.Info("agent config reloaded successfully")
+		}
 	}
 }
