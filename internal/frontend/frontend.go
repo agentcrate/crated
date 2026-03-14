@@ -53,6 +53,13 @@ type Frontend interface {
 	Run(ctx context.Context, bridge *AgentBridge) error
 }
 
+// Usage tracks token counts for a response turn.
+type Usage struct {
+	PromptTokens     int32
+	CompletionTokens int32
+	TotalTokens      int32
+}
+
 // Event represents a response chunk from the agent.
 type Event struct {
 	// Text is the text content of this chunk (may be partial when streaming).
@@ -63,6 +70,12 @@ type Event struct {
 
 	// ToolCalls lists the names of tools called in this event (if any).
 	ToolCalls []string
+
+	// Usage contains token counts (only populated on IsFinal events).
+	Usage *Usage
+
+	// Author is the agent or sub-agent that produced this event.
+	Author string
 }
 
 // AgentBridge wraps the ADK runner with session management.
@@ -113,6 +126,9 @@ func (b *AgentBridge) Chat(ctx context.Context, userID, sessionID, message strin
 	return func(yield func(Event, error) bool) {
 		userMsg := genai.NewContentFromText(message, genai.RoleUser)
 
+		// Accumulate token usage across the response turn.
+		var totalUsage Usage
+
 		for adkEvent, err := range b.runner.Run(ctx, userID, sessionID, userMsg, agent.RunConfig{
 			StreamingMode: agent.StreamingModeSSE,
 		}) {
@@ -134,10 +150,24 @@ func (b *AgentBridge) Chat(ctx context.Context, userID, sessionID, message strin
 				}
 			}
 
+			// Extract token usage from the ADK event metadata.
+			if adkEvent.UsageMetadata != nil {
+				um := adkEvent.UsageMetadata
+				totalUsage.PromptTokens += um.PromptTokenCount
+				totalUsage.CompletionTokens += um.CandidatesTokenCount
+				totalUsage.TotalTokens += um.TotalTokenCount
+			}
+
 			ev := Event{
 				Text:      text,
 				IsFinal:   adkEvent.IsFinalResponse(),
 				ToolCalls: toolCalls,
+				Author:    adkEvent.Author,
+			}
+
+			// Attach accumulated usage on the final event.
+			if ev.IsFinal && totalUsage.TotalTokens > 0 {
+				ev.Usage = &totalUsage
 			}
 
 			if !yield(ev, nil) {

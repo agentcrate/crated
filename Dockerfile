@@ -67,8 +67,8 @@ RUN mkdir -p /agent/tools && chown -R agent:agent /agent
 
 USER agent
 
-# Expose health check port.
-EXPOSE 8080
+# Expose health check port and playground port.
+EXPOSE 8080 3000
 
 # Use tini as PID 1 for proper signal handling.
 ENTRYPOINT ["/sbin/tini", "--", "/agent/crated"]
