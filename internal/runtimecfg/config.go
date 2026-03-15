@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // ConfigPath is the conventional path for the runtime config inside a
@@ -80,10 +81,10 @@ func (c *Config) Save(path string) error {
 	if err != nil {
 		return fmt.Errorf("marshaling runtime config: %w", err)
 	}
-	if err := os.MkdirAll(dirOf(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, 0o600)
 }
 
 // Lookup returns the connection details for a model, or nil if not found.
@@ -93,13 +94,4 @@ func (c *Config) Lookup(model string) *ModelConnection {
 		return nil
 	}
 	return &mc
-}
-
-func dirOf(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' {
-			return path[:i]
-		}
-	}
-	return "."
 }

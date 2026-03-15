@@ -25,7 +25,9 @@ func TestRegisterAndGetFrontend(t *testing.T) {
 	}()
 
 	mock := &mockFrontend{name: "test-fe"}
-	RegisterFrontend(mock)
+	if err := RegisterFrontend(mock); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got, ok := GetFrontend("test-fe")
 	if !ok {
@@ -53,7 +55,7 @@ func TestGetFrontendNotFound(t *testing.T) {
 	}
 }
 
-func TestRegisterFrontendDuplicatePanics(t *testing.T) {
+func TestRegisterFrontendDuplicateReturnsError(t *testing.T) {
 	frontendsMu.Lock()
 	saved := frontends
 	frontends = make(map[string]Frontend)
@@ -65,14 +67,13 @@ func TestRegisterFrontendDuplicatePanics(t *testing.T) {
 	}()
 
 	mock := &mockFrontend{name: "dupe"}
-	RegisterFrontend(mock)
+	if err := RegisterFrontend(mock); err != nil {
+		t.Fatalf("first registration should succeed: %v", err)
+	}
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on duplicate registration")
-		}
-	}()
-	RegisterFrontend(mock)
+	if err := RegisterFrontend(mock); err == nil {
+		t.Fatal("expected error on duplicate registration")
+	}
 }
 
 func TestRegisteredFrontends(t *testing.T) {
@@ -86,8 +87,12 @@ func TestRegisteredFrontends(t *testing.T) {
 		frontendsMu.Unlock()
 	}()
 
-	RegisterFrontend(&mockFrontend{name: "alpha"})
-	RegisterFrontend(&mockFrontend{name: "beta"})
+	if err := RegisterFrontend(&mockFrontend{name: "alpha"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := RegisterFrontend(&mockFrontend{name: "beta"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	names := RegisteredFrontends()
 	if len(names) != 2 {

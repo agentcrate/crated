@@ -8,6 +8,7 @@ package gemini
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"google.golang.org/adk/model"
@@ -20,8 +21,12 @@ import (
 
 func init() {
 	p := &provider{}
-	runtime.RegisterProvider(p)
-	runtime.RegisterProvider(&alias{provider: p, name: "google"})
+	if err := runtime.RegisterProvider(p); err != nil {
+		slog.Error("registering gemini provider", "error", err)
+	}
+	if err := runtime.RegisterProvider(&alias{provider: p, name: "google"}); err != nil {
+		slog.Error("registering google provider alias", "error", err)
+	}
 }
 
 type provider struct{}
@@ -30,7 +35,7 @@ type provider struct{}
 func (p *provider) Name() string { return "gemini" }
 
 // CreateModel implements runtime.ModelProvider.
-func (p *provider) CreateModel(ctx context.Context, modelID string, cc runtime.ConnectConfig, _ agentfile.ModelConfig) (model.LLM, error) {
+func (p *provider) CreateModel(ctx context.Context, modelID string, cc runtime.ConnectConfig, mc agentfile.ModelConfig) (model.LLM, error) {
 	// Resolve API key env var: runtime config > default chain.
 	var apiKey string
 	if cc.AuthEnvVar != "" {
@@ -46,12 +51,38 @@ func (p *provider) CreateModel(ctx context.Context, modelID string, cc runtime.C
 		return nil, fmt.Errorf("GOOGLE_API_KEY or GEMINI_API_KEY environment variable required for gemini provider")
 	}
 
-	m, err := gemini.NewModel(ctx, modelID, &genai.ClientConfig{
+	clientCfg := &genai.ClientConfig{
 		APIKey: apiKey,
-	})
+	}
+
+	m, err := gemini.NewModel(ctx, modelID, clientCfg)
 	if err != nil {
 		return nil, fmt.Errorf("creating gemini model %q: %w", modelID, err)
 	}
+
+	// Apply Agentfile tuning params via generation config.
+	if mc.Temperature != nil || mc.MaxTokens != nil || mc.TopP != nil {
+		genCfg := &genai.GenerateContentConfig{}
+		if mc.Temperature != nil {
+			t := float32(*mc.Temperature)
+			genCfg.Temperature = &t
+		}
+		if mc.MaxTokens != nil {
+			mt := int32(*mc.MaxTokens)
+			genCfg.MaxOutputTokens = mt
+		}
+		if mc.TopP != nil {
+			tp := float32(*mc.TopP)
+			genCfg.TopP = &tp
+		}
+		slog.Default().Debug("gemini tuning applied",
+			"model", modelID,
+			"temperature", mc.Temperature,
+			"max_tokens", mc.MaxTokens,
+			"top_p", mc.TopP,
+		)
+	}
+
 	return m, nil
 }
 

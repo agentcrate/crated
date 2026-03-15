@@ -3,16 +3,17 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT  ?= $(shell git rev-parse HEAD 2>/dev/null || echo "none")
 DATE    ?= $(shell date -u +%Y-%m-%d)
+LDFLAGS  = -X main.version=$(VERSION)
 
 .PHONY: build test lint clean install coverage
 
 ## build: Build the crated binary
 build:
-	@go build -o bin/crated ./cmd/crated
+	@go build -ldflags "$(LDFLAGS)" -o bin/crated ./cmd/crated
 
 ## install: Install crated to $GOPATH/bin
 install:
-	@go install ./cmd/crated
+	@go install -ldflags "$(LDFLAGS)" ./cmd/crated
 
 ## test: Run all tests
 test:
