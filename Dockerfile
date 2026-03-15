@@ -42,9 +42,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 FROM alpine:3.21
 
 # Core runtime deps + Node.js (npx) + Python (uvx) for stdio skills.
+# Pin versions for reproducible builds.
 RUN apk add --no-cache ca-certificates tini nodejs npm python3 py3-pip \
-    && npm install -g npm@latest \
-    && pip3 install --break-system-packages uv \
+    && npm install -g npm@10 \
+    && pip3 install --break-system-packages uv==0.6.0 \
     && ln -sf /usr/bin/python3 /usr/bin/python
 
 # Labels for OCI image metadata.
@@ -66,6 +67,10 @@ COPY --from=builder /out/crated /agent/crated
 RUN mkdir -p /agent/tools && chown -R agent:agent /agent
 
 USER agent
+
+# Health check for container orchestrators (Kubernetes, Docker Compose).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:8080/healthz || exit 1
 
 # Expose health check port and playground port.
 EXPOSE 8080 3000

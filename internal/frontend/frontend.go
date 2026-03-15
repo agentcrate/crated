@@ -186,16 +186,17 @@ var (
 
 // RegisterFrontend registers a frontend implementation.
 // Typically called from init() in frontend packages.
-// Panics if a frontend with the same name is already registered.
-func RegisterFrontend(f Frontend) {
+// Returns an error if a frontend with the same name is already registered.
+func RegisterFrontend(f Frontend) error {
 	frontendsMu.Lock()
 	defer frontendsMu.Unlock()
 
 	name := f.Name()
 	if _, exists := frontends[name]; exists {
-		panic(fmt.Sprintf("frontend %q already registered", name))
+		return fmt.Errorf("frontend %q already registered", name)
 	}
 	frontends[name] = f
+	return nil
 }
 
 // GetFrontend returns a registered frontend by name.

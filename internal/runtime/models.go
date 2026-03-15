@@ -43,16 +43,17 @@ var (
 
 // RegisterProvider registers a model provider. Providers are typically
 // registered via init() functions in provider packages.
-// Panics if a provider with the same name is already registered.
-func RegisterProvider(p ModelProvider) {
+// Returns an error if a provider with the same name is already registered.
+func RegisterProvider(p ModelProvider) error {
 	providersMu.Lock()
 	defer providersMu.Unlock()
 
 	name := p.Name()
 	if _, exists := providers[name]; exists {
-		panic(fmt.Sprintf("model provider %q already registered", name))
+		return fmt.Errorf("model provider %q already registered", name)
 	}
 	providers[name] = p
+	return nil
 }
 
 // GetProvider returns a registered provider by name.

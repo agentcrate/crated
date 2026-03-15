@@ -35,7 +35,9 @@ const defaultBaseURL = "https://api.openai.com/v1"
 const defaultAPIKeyEnv = "OPENAI_API_KEY"
 
 func init() {
-	runtime.RegisterProvider(&provider{})
+	if err := runtime.RegisterProvider(&provider{}); err != nil {
+		slog.Error("registering openai provider", "error", err)
+	}
 }
 
 type provider struct{}
@@ -251,7 +253,9 @@ func (m *openaiModel) generateStreaming(ctx context.Context, req *model.LLMReque
 					content := &genai.Content{Role: "model"}
 					for _, tc := range toolCalls {
 						var args map[string]any
-						_ = json.Unmarshal([]byte(tc.Arguments), &args)
+						if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
+							m.logger.Warn("malformed tool call arguments", "tool", tc.Name, "error", err)
+						}
 						content.Parts = append(content.Parts, genai.NewPartFromFunctionCall(tc.Name, args))
 					}
 					finalResp.Content = content
@@ -469,12 +473,13 @@ func mapRole(role string) string {
 }
 
 func extractText(c *genai.Content) string {
+	var sb strings.Builder
 	for _, part := range c.Parts {
 		if part.Text != "" {
-			return part.Text
+			sb.WriteString(part.Text)
 		}
 	}
-	return ""
+	return sb.String()
 }
 
 func convertTools(genaiTools []*genai.Tool) []oaiTool {
@@ -508,7 +513,9 @@ func convertSyncResponse(resp *chatResponse) *model.LLMResponse {
 	if len(ch.Message.ToolCalls) > 0 {
 		for _, tc := range ch.Message.ToolCalls {
 			var args map[string]any
-			_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+				slog.Warn("malformed tool call arguments", "tool", tc.Function.Name, "error", err)
+			}
 			content.Parts = append(content.Parts, genai.NewPartFromFunctionCall(tc.Function.Name, args))
 		}
 	} else if ch.Message.Content != "" {

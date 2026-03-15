@@ -75,9 +75,10 @@ func (o *Options) withDefaults() Options {
 
 // Client wraps http.Client with production-ready defaults.
 type Client struct {
-	http   *http.Client
-	opts   Options
-	logger *slog.Logger
+	http         *http.Client
+	streamClient *http.Client // lazily initialized for streaming requests
+	opts         Options
+	logger       *slog.Logger
 }
 
 // New creates a Client with the given options.
@@ -161,9 +162,13 @@ func (c *Client) ReadBody(resp *http.Response) ([]byte, error) {
 // no timeout (context cancellation controls the stream lifecycle instead).
 // The caller MUST close resp.Body when done.
 func (c *Client) DoStream(req *http.Request) (*http.Response, error) {
-	// Use a separate client without timeout for streaming.
-	streamClient := &http.Client{}
-	resp, err := streamClient.Do(req)
+	// Use the client's transport but without timeout for streaming.
+	if c.streamClient == nil {
+		c.streamClient = &http.Client{
+			Transport: c.http.Transport,
+		}
+	}
+	resp, err := c.streamClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

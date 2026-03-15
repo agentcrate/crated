@@ -36,7 +36,9 @@ const (
 )
 
 func init() {
-	runtime.RegisterProvider(&provider{})
+	if err := runtime.RegisterProvider(&provider{}); err != nil {
+		slog.Error("registering anthropic provider", "error", err)
+	}
 }
 
 type provider struct{}
@@ -270,7 +272,9 @@ func (m *anthropicModel) generateStreaming(ctx context.Context, req *model.LLMRe
 				}
 				if finalUsage != nil {
 					finalResp.UsageMetadata = &genai.GenerateContentResponseUsageMetadata{
+						PromptTokenCount:     int32(finalUsage.InputTokens),
 						CandidatesTokenCount: int32(finalUsage.OutputTokens),
+						TotalTokenCount:      int32(finalUsage.InputTokens + finalUsage.OutputTokens),
 					}
 				}
 				yield(finalResp, nil)

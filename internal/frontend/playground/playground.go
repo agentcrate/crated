@@ -19,6 +19,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -29,7 +32,9 @@ import (
 var staticFS embed.FS
 
 func init() {
-	frontend.RegisterFrontend(&Playground{})
+	if err := frontend.RegisterFrontend(&Playground{}); err != nil {
+		slog.Default().Error("registering playground frontend", "error", err)
+	}
 }
 
 // Playground is the web-based chat frontend.
@@ -81,18 +86,24 @@ func (p *Playground) Run(ctx context.Context, bridge *frontend.AgentBridge) erro
 		Handler: mux,
 	}
 
-	// Listen on port 3000.
-	ln, err := net.Listen("tcp", ":3000")
+	// Listen on configurable port (default: 3000).
+	port := os.Getenv("PLAYGROUND_PORT")
+	if port == "" {
+		port = "3000"
+	}
+	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		return fmt.Errorf("listening on :3000: %w", err)
+		return fmt.Errorf("listening on :%s: %w", port, err)
 	}
 
-	logger.Info("playground running", "url", "http://localhost:3000")
+	logger.Info("playground running", "url", "http://localhost:"+port)
 
 	// Shutdown on context cancellation.
 	go func() {
 		<-ctx.Done()
-		_ = server.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
 	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -106,7 +117,15 @@ func (p *Playground) Run(ctx context.Context, bridge *frontend.AgentBridge) erro
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins in dev mode.
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // Same-origin requests don't send Origin header.
+		}
+		// Allow localhost origins on any port (dev + playground).
+		return strings.HasPrefix(origin, "http://localhost:") ||
+			strings.HasPrefix(origin, "http://127.0.0.1:") ||
+			origin == "http://localhost" ||
+			origin == "http://127.0.0.1"
 	},
 }
 
@@ -137,7 +156,11 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, bridge *frontend.Ag
 	ctx := r.Context()
 
 	// Create a session for this WebSocket connection.
-	userID := "playground-user"
+	userID := r.URL.Query().Get("user")
+	if userID == "" {
+		userID = "playground-user"
+		logger.Warn("no user ID provided in WebSocket connection, using default")
+	}
 	sessionID, err := bridge.CreateSession(ctx, userID)
 	if err != nil {
 		logger.Error("creating session", "error", err)
@@ -172,12 +195,18 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, bridge *frontend.Ag
 
 			// Send tool calls.
 			if len(event.ToolCalls) > 0 {
-				_ = writeJSON(conn, wsOutgoing{Type: "tool_call", Tools: event.ToolCalls})
+				if err := writeJSON(conn, wsOutgoing{Type: "tool_call", Tools: event.ToolCalls}); err != nil {
+					logger.Warn("failed to write tool_call to websocket", "error", err)
+					return
+				}
 			}
 
 			// Send text content.
 			if event.Text != "" {
-				_ = writeJSON(conn, wsOutgoing{Type: "text", Text: event.Text})
+				if err := writeJSON(conn, wsOutgoing{Type: "text", Text: event.Text}); err != nil {
+					logger.Warn("failed to write text to websocket", "error", err)
+					return
+				}
 			}
 
 			// Send done marker with usage data.
@@ -188,7 +217,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, bridge *frontend.Ag
 					doneMsg.CompletionTokens = event.Usage.CompletionTokens
 					doneMsg.TotalTokens = event.Usage.TotalTokens
 				}
-				_ = writeJSON(conn, doneMsg)
+				if err := writeJSON(conn, doneMsg); err != nil {
+					logger.Warn("failed to write done to websocket", "error", err)
+				}
 			}
 		}
 	}

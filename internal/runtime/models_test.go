@@ -61,7 +61,9 @@ func TestRegisterAndGetProvider(t *testing.T) {
 	saveAndRestoreProviders(t)
 
 	sp := &stubProvider{name: "test-prov"}
-	RegisterProvider(sp)
+	if err := RegisterProvider(sp); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got, ok := GetProvider("test-prov")
 	if !ok {
@@ -81,25 +83,28 @@ func TestGetProviderNotFound(t *testing.T) {
 	}
 }
 
-func TestRegisterProviderDuplicatePanics(t *testing.T) {
+func TestRegisterProviderDuplicateReturnsError(t *testing.T) {
 	saveAndRestoreProviders(t)
 
 	sp := &stubProvider{name: "dupe"}
-	RegisterProvider(sp)
+	if err := RegisterProvider(sp); err != nil {
+		t.Fatalf("first registration should succeed: %v", err)
+	}
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on duplicate registration")
-		}
-	}()
-	RegisterProvider(sp)
+	if err := RegisterProvider(sp); err == nil {
+		t.Fatal("expected error on duplicate registration")
+	}
 }
 
 func TestRegisteredProviders(t *testing.T) {
 	saveAndRestoreProviders(t)
 
-	RegisterProvider(&stubProvider{name: "alpha"})
-	RegisterProvider(&stubProvider{name: "beta"})
+	if err := RegisterProvider(&stubProvider{name: "alpha"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := RegisterProvider(&stubProvider{name: "beta"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	names := RegisteredProviders()
 	if len(names) != 2 {
@@ -184,7 +189,9 @@ func TestNewModelRegistry_Success(t *testing.T) {
 	saveAndRestoreProviders(t)
 
 	sp := &stubProvider{name: "test", model: &stubModel{name: "test/fast"}}
-	RegisterProvider(sp)
+	if err := RegisterProvider(sp); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	brain := agentfile.Brain{
 		Default: "fast",
@@ -210,7 +217,9 @@ func TestNewModelRegistry_DefaultModelFails(t *testing.T) {
 	saveAndRestoreProviders(t)
 
 	sp := &stubProvider{name: "test", err: fmt.Errorf("auth failed")}
-	RegisterProvider(sp)
+	if err := RegisterProvider(sp); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	brain := agentfile.Brain{
 		Default: "main",
@@ -236,7 +245,9 @@ func TestNewModelRegistry_NonDefaultModelFails_GracefulDegradation(t *testing.T)
 	_ = origCreate // just to use it
 
 	// We need a custom provider that fails for non-default.
-	RegisterProvider(&failSecondProvider{name: "test"})
+	if err := RegisterProvider(&failSecondProvider{name: "test"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	brain := agentfile.Brain{
 		Default: "default-model",
@@ -308,7 +319,9 @@ func TestCreateModel_UsesRuntimeConfig(t *testing.T) {
 	saveAndRestoreProviders(t)
 
 	sp := &stubProvider{name: "openai", model: &stubModel{name: "openai/gpt-4o"}}
-	RegisterProvider(sp)
+	if err := RegisterProvider(sp); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	mc := agentfile.ModelConfig{Name: "fast", Model: "openai/gpt-4o"}
 	rc := &runtimecfg.Config{

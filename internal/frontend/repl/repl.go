@@ -30,7 +30,9 @@ var exitCommands = map[string]bool{
 }
 
 func init() {
-	frontend.RegisterFrontend(&replFrontend{})
+	if err := frontend.RegisterFrontend(&replFrontend{}); err != nil {
+		slog.Default().Error("registering repl frontend", "error", err)
+	}
 }
 
 type replFrontend struct{}
@@ -84,7 +86,7 @@ func (f *replFrontend) Run(ctx context.Context, bridge *frontend.AgentBridge) er
 
 		prevText := ""
 		prompted := false
-		for event, err := range bridge.Chat(ctx, "console_user", sessionID, userInput) {
+		for event, err := range bridge.Chat(ctx, "console_user", sessionID, strings.TrimSpace(userInput)) {
 			if err != nil {
 				fmt.Printf("\nERROR: %v\n", err)
 				break
