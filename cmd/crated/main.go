@@ -143,7 +143,7 @@ func run(agentfilePath, profileFlag, runtimeCfgFlag, frontendName string, health
 		}()
 	}
 
-	// 3. Parse and validate the Agentfile.
+	// 2. Parse and validate the Agentfile.
 	data, err := os.ReadFile(agentfilePath)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", agentfilePath, err)
@@ -160,7 +160,7 @@ func run(agentfilePath, profileFlag, runtimeCfgFlag, frontendName string, health
 		return fmt.Errorf("agentfile validation failed with %d errors", len(result.Errors))
 	}
 
-	// 4. Resolve the active profile (flag > env > base).
+	// 3. Resolve the active profile (flag > env > base).
 	af := result.Agentfile
 	profileName := resolveProfile(profileFlag)
 	if profileName != "" {
@@ -172,7 +172,7 @@ func run(agentfilePath, profileFlag, runtimeCfgFlag, frontendName string, health
 		logger.Info("using profile", "profile", profileName)
 	}
 
-	// 5. Load runtime config (written by crate build).
+	// 4. Load runtime config (written by crate build).
 	rcPath := runtimeCfgFlag
 	if rcPath == "" {
 		// Default: .crate/runtime.json relative to the Agentfile.
@@ -183,7 +183,7 @@ func run(agentfilePath, profileFlag, runtimeCfgFlag, frontendName string, health
 		return fmt.Errorf("loading runtime config: %w", err)
 	}
 
-	// 6. Initialize the runtime (models + skills + ADK agent).
+	// 5. Initialize the runtime (models + skills + ADK agent).
 	rt := runtime.New(af, rc)
 	defer rt.Close()
 
@@ -194,12 +194,12 @@ func run(agentfilePath, profileFlag, runtimeCfgFlag, frontendName string, health
 	// Start SIGHUP handler now that runtime is ready.
 	go handleSIGHUP(ctx, logger, agentfilePath, profileName, rt)
 
-	// 7. Mark ready — readiness probe now returns 200.
+	// 6. Mark ready — readiness probe now returns 200.
 	if hs != nil {
 		hs.MarkReady()
 	}
 
-	// 8. Create the agent bridge and run the frontend.
+	// 7. Create the agent bridge and run the frontend.
 	bridge, err := frontend.NewAgentBridge(rt.Agent())
 	if err != nil {
 		return fmt.Errorf("creating agent bridge: %w", err)

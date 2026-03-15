@@ -200,12 +200,19 @@ func (r *Runtime) Close() {
 // Returns the toolset, an optional closer function, and any error.
 func connectSkill(ctx context.Context, skill *agentfile.Skill) (tool.Toolset, func(), error) {
 	var transport mcp.Transport
+	var closer func()
 
 	switch skill.Type {
 	case "stdio":
 		// Launch the tool as a subprocess and communicate over stdin/stdout.
 		cmd := exec.CommandContext(ctx, skill.Command, skill.Args...)
 		transport = &mcp.CommandTransport{Command: cmd}
+		// Return a closer that kills the subprocess on shutdown.
+		closer = func() {
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		}
 
 	case "http":
 		// Streamable HTTP transport (MCP over HTTP with optional streaming).
@@ -233,7 +240,7 @@ func connectSkill(ctx context.Context, skill *agentfile.Skill) (tool.Toolset, fu
 		return nil, nil, err
 	}
 
-	return ts, nil, nil
+	return ts, closer, nil
 }
 
 // preloadContext is a minimal agent.ReadonlyContext used to eagerly
