@@ -167,8 +167,12 @@ make lint
 | Component | Description | License |
 | --------- | ----------- | ------- |
 | [`agentfile`](https://github.com/agentcrate/agentfile) | Agentfile v1 spec, types, parsing, and validation | Apache 2.0 |
+| [`api`](https://github.com/agentcrate/api) | Protocol Buffer definitions for all AgentCrate services | Apache 2.0 |
 | [`crate`](https://github.com/agentcrate/crate) | CLI for building, validating, and publishing agent images | Apache 2.0 |
 | **`crated`** (this repo) | Agent runtime daemon (container entrypoint) | Apache 2.0 |
+| [`cratehub`](https://github.com/agentcrate/cratehub) | CrateHub API server | Internal |
+| [`cratehub-web`](https://github.com/agentcrate/cratehub-web) | CrateHub web frontend | Internal |
+| [`crateregistry`](https://github.com/agentcrate/crateregistry) | OCI Distribution registry | Internal |
 
 ### Project Structure
 
