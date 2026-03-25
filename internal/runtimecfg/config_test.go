@@ -40,10 +40,10 @@ func TestLoad_ValidConfig(t *testing.T) {
 	}
 
 	oai := cfg.Lookup("openai/gpt-4o")
-	if oai == nil {
+	if oai == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected openai/gpt-4o to exist")
 	}
-	if oai.APIType != "openai" {
+	if oai.APIType != "openai" { //nolint:staticcheck // oai confirmed non-nil above
 		t.Errorf("expected api_type=openai, got %q", oai.APIType)
 	}
 	if oai.APIBase != "https://api.openai.com/v1" {
@@ -54,10 +54,10 @@ func TestLoad_ValidConfig(t *testing.T) {
 	}
 
 	ollama := cfg.Lookup("ollama/mistral")
-	if ollama == nil {
+	if ollama == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected ollama/mistral to exist")
 	}
-	if ollama.HostEnvVar != "OLLAMA_HOST" {
+	if ollama.HostEnvVar != "OLLAMA_HOST" { //nolint:staticcheck // ollama confirmed non-nil above
 		t.Errorf("expected host_env_var=OLLAMA_HOST, got %q", ollama.HostEnvVar)
 	}
 }
@@ -67,10 +67,10 @@ func TestLoad_MissingFile_ReturnsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got: %v", err)
 	}
-	if cfg == nil {
+	if cfg == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected non-nil config")
 	}
-	if len(cfg.Models) != 0 {
+	if len(cfg.Models) != 0 { //nolint:staticcheck // cfg confirmed non-nil above
 		t.Errorf("expected empty models map, got %d entries", len(cfg.Models))
 	}
 }
@@ -112,10 +112,10 @@ func TestSave_And_Reload(t *testing.T) {
 	}
 
 	conn := loaded.Lookup("anthropic/claude-sonnet-4-20250514")
-	if conn == nil {
+	if conn == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected model to exist after reload")
 	}
-	if conn.APIType != "anthropic" {
+	if conn.APIType != "anthropic" { //nolint:staticcheck // conn confirmed non-nil above
 		t.Errorf("expected api_type=anthropic, got %q", conn.APIType)
 	}
 }
@@ -159,10 +159,10 @@ func TestLookup_Found(t *testing.T) {
 		},
 	}
 	conn := cfg.Lookup("openai/gpt-4o")
-	if conn == nil {
+	if conn == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected connection to be found")
 	}
-	if conn.APIType != "openai" {
+	if conn.APIType != "openai" { //nolint:staticcheck // conn confirmed non-nil above
 		t.Errorf("expected api_type=openai, got %q", conn.APIType)
 	}
 }
@@ -202,10 +202,10 @@ func TestLoad_WithMaxConcurrency(t *testing.T) {
 	}
 
 	conn := cfg.Lookup("ollama/mistral")
-	if conn == nil {
+	if conn == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected model to exist")
 	}
-	if conn.MaxConcurrency != 1 {
+	if conn.MaxConcurrency != 1 { //nolint:staticcheck // conn confirmed non-nil above
 		t.Errorf("expected max_concurrency=1, got %d", conn.MaxConcurrency)
 	}
 }
@@ -267,10 +267,10 @@ func TestSave_WithMultipleModels(t *testing.T) {
 	}
 
 	conn := loaded.Lookup("anthropic/claude-sonnet-4-20250514")
-	if conn == nil {
+	if conn == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected anthropic model")
 	}
-	if conn.MaxConcurrency != 5 {
+	if conn.MaxConcurrency != 5 { //nolint:staticcheck // conn confirmed non-nil above
 		t.Errorf("expected max_concurrency=5, got %d", conn.MaxConcurrency)
 	}
 }

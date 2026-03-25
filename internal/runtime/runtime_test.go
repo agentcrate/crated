@@ -13,13 +13,13 @@ func TestNew_WithNilConfig(t *testing.T) {
 		Metadata: agentfile.Metadata{Name: "test-agent"},
 	}
 	rt := New(af, nil)
-	if rt == nil {
+	if rt == nil { //nolint:staticcheck // guarding against nil
 		t.Fatal("expected non-nil Runtime")
 	}
 	if rt.Agentfile() != af {
 		t.Error("expected Agentfile to match")
 	}
-	if rt.rc == nil {
+	if rt.rc == nil { //nolint:staticcheck // rt confirmed non-nil above
 		t.Error("expected rc to be initialized when nil is passed")
 	}
 }
