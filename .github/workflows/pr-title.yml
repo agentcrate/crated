@@ -32,7 +32,17 @@ jobs:
             runtime
             models
             providers
+            openai
+            anthropic
             gemini
+            frontend
+            repl
+            playground
+            health
+            httpclient
+            sse
+            ratelimit
+            config
             docker
             deps
             release
