@@ -76,7 +76,7 @@ graph TD
 ## Two-Layer Configuration
 
 | Layer | File | Set by | Contains |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Agentfile** | `Agentfile` | Developer | Models, persona, skills, tuning |
 | **Runtime config** | `.crate/runtime.json` | `crate build` | API endpoints, auth env vars, host overrides |
 
@@ -105,7 +105,7 @@ Each model is wrapped in a middleware chain: `Rate Limiter → Logger → Provid
 ## Signal Handling
 
 | Signal | Behavior |
-|---|---|
+| --- | --- |
 | `SIGINT` / `SIGTERM` (1st) | Graceful shutdown: close skills, drain connections |
 | `SIGINT` / `SIGTERM` (2nd) | Force exit |
 | `SIGHUP` | Hot-reload: re-parse Agentfile, rebuild agent with new persona/brain, keep skill connections alive |
@@ -113,7 +113,7 @@ Each model is wrapped in a middleware chain: `Rate Limiter → Logger → Provid
 ## Health Probes
 
 | Endpoint | Type | Returns 200 |
-|---|---|---|
+| --- | --- | --- |
 | `GET /healthz` | Liveness | Always (process is alive) |
 | `GET /readyz` | Readiness | After models + skills initialized |
 | `GET /metrics` | Diagnostics | Always (uptime, heap, goroutines, GC) |
@@ -126,7 +126,7 @@ Stage 2 (runtime):  alpine:3.21 → crated + Node.js (npx) + Python (uvx)
 ```
 
 | Decision | Rationale |
-|---|---|
+| --- | --- |
 | **tini** as PID 1 | Proper signal forwarding to Go process |
 | Non-root `agent` user | Container security best practice |
 | Node.js + Python | Pre-installed for stdio MCP tools (npx/uvx) |
@@ -136,7 +136,7 @@ Stage 2 (runtime):  alpine:3.21 → crated + Node.js (npx) + Python (uvx)
 ## Dependencies
 
 | Dependency | Purpose |
-|---|---|
+| --- | --- |
 | `google.golang.org/adk` | ADK agent framework, runner, session, tool interfaces |
 | `google.golang.org/genai` | GenAI types (Content, Part, FunctionCall) |
 | `github.com/modelcontextprotocol/go-sdk/mcp` | MCP client transports (stdio, HTTP, SSE) |
