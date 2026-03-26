@@ -4,7 +4,7 @@
 
 **The runtime daemon for AI agents.**
 
-[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/agentcrate/crated/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/agentcrate/crated/actions)
 [![codecov](https://codecov.io/gh/agentcrate/crated/graph/badge.svg)](https://codecov.io/gh/agentcrate/crated)
@@ -158,7 +158,7 @@ make lint
 
 ### Requirements
 
-- Go 1.24+
+- Go 1.25+
 - Docker Engine 24+ (for building the base image)
 
 ## Architecture
