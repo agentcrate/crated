@@ -1,123 +1,116 @@
-# Architecture
+# crated — Architecture
 
-This document describes the internal architecture of `crated`, the agent runtime daemon.
+> Agent runtime daemon — the container entrypoint that powers AI agents built with [AgentCrate](https://agentcrate.ai).
+> Consumed as a binary by `crate run` and the Docker base image.
 
-## System Overview
+## Module Overview
 
 ```text
-┌──────────────────────────────────────────────────────┐
-│                     crated                           │
-│                                                      │
-│  ┌──────────┐    ┌──────────┐    ┌───────────────┐   │
-│  │ Frontend │◄──►│  Agent   │◄──►│ Model         │   │
-│  │ (REPL)   │    │  Bridge  │    │ Registry      │   │
-│  └──────────┘    └────┬─────┘    └───┬───────────┘   │
-│                       │              │               │
-│                  ┌────▼─────┐   ┌────▼────────────┐  │
-│                  │ ADK      │   │ Providers       │  │
-│                  │ Runner   │   │ ┌─────────────┐ │  │
-│                  └────┬─────┘   │ │ OpenAI      │ │  │
-│                       │         │ │ Anthropic   │ │  │
-│                  ┌────▼─────┐   │ │ Gemini      │ │  │
-│                  │ MCP      │   │ └─────────────┘ │  │
-│                  │ Toolsets  │   └─────────────────┘  │
-│                  └──────────┘                        │
-│                                                      │
-│  ┌──────────┐    ┌──────────┐    ┌───────────────┐   │
-│  │ Health   │    │ Runtime  │    │ HTTP Client   │   │
-│  │ Server   │    │ Config   │    │ + SSE Reader  │   │
-│  └──────────┘    └──────────┘    └───────────────┘   │
-└──────────────────────────────────────────────────────┘
+github.com/agentcrate/crated
 ```
 
-## Package Map
+```mermaid
+graph TD
+  Main["cmd/crated — CLI entrypoint"]
+  Main -->|"New(af, rc)"| Runtime
+  Main -->|"NewServer(:8080)"| Health
 
-| Package | Lines | Purpose |
-|---|---|---|
-| `cmd/crated` | 280 | CLI entrypoint, signal handling, SIGHUP hot-reload |
-| `internal/runtime` | 482 | Core engine: model registry, provider interface, skill connections |
-| `internal/runtime/middleware` | 142 | Model decorators: logging, rate limiting |
-| `internal/runtime/providers/openai` | 556 | OpenAI + compatible APIs (Ollama, Azure, vLLM) |
-| `internal/runtime/providers/anthropic` | 562 | Anthropic Claude models |
-| `internal/runtime/providers/gemini` | 102 | Google Gemini (delegates to ADK SDK) |
-| `internal/frontend` | 220 | Pluggable UI interface, AgentBridge, registry |
-| `internal/frontend/repl` | 115 | Interactive console frontend |
-| `internal/health` | 170 | HTTP health probes (`/healthz`, `/readyz`, `/metrics`) |
-| `internal/httpclient` | 200 | HTTP client with retries, backoff, body limits |
-| `internal/ratelimit` | 81 | Semaphore-based concurrency limiter |
-| `internal/runtimecfg` | 98 | Build-time config loader (`.crate/runtime.json`) |
-| `internal/sse` | 86 | Server-Sent Events stream parser |
+  subgraph runtime ["internal/runtime"]
+    Runtime["runtime.go — Init, Reload, Close"]
+    Models["models.go — ModelRegistry, provider resolution"]
+    Middleware["middleware/ — logging, rate limiting"]
+  end
 
-## Key Design Decisions
+  subgraph providers ["internal/runtime/providers"]
+    OpenAI["openai/ — OpenAI + compatible APIs"]
+    Anthropic["anthropic/ — Claude models"]
+    Gemini["gemini/ — Google Gemini (ADK SDK)"]
+  end
 
-### Provider Registration Pattern
+  subgraph frontend ["internal/frontend"]
+    Bridge["AgentBridge — ADK runner wrapper"]
+    REPL["repl/ — Console frontend"]
+    Playground["playground/ — Web UI frontend"]
+  end
 
-Providers self-register via `init()` side-effect imports. The main package imports them:
+  subgraph infra ["infrastructure packages"]
+    Health["health/ — /healthz, /readyz, /metrics"]
+    HTTPClient["httpclient/ — retries, backoff, body limits"]
+    RateLimit["ratelimit/ — semaphore limiter"]
+    SSE["sse/ — SSE stream parser"]
+    RtCfg["runtimecfg/ — .crate/runtime.json loader"]
+  end
 
-```go
-import (
-    _ "github.com/agentcrate/crated/internal/runtime/providers/openai"
-    _ "github.com/agentcrate/crated/internal/runtime/providers/anthropic"
-    _ "github.com/agentcrate/crated/internal/runtime/providers/gemini"
-)
+  Runtime --> Models
+  Models -->|"init() registration"| OpenAI & Anthropic & Gemini
+  Models --> Middleware
+  Runtime -->|"connectSkill()"| MCP["MCP Toolsets"]
+  Runtime -->|"llmagent.New()"| ADK["ADK Agent"]
+  Bridge --> ADK
+  REPL --> Bridge
+  OpenAI & Anthropic --> HTTPClient
+  OpenAI & Anthropic --> SSE
+  Models --> RateLimit
+  Runtime --> RtCfg
 ```
 
-Each provider calls `runtime.RegisterProvider()` in its `init()`. This keeps the runtime package decoupled from specific providers and allows new providers to be added without modifying the core.
+## Startup Pipeline
 
-### Two-Layer Configuration
+`main()` → `Runtime.Init()` runs 4 sequential phases:
+
+```text
+┌───────────────────────────────────────────────────────────┐
+│ Phase 1: NewModelRegistry() — resolve providers, connect  │
+│          models, apply middleware (logger → rate limiter)  │
+│ Phase 2: connectSkill() — stdio/http/sse MCP transports   │
+│          + eager Tools() preload for fast first message    │
+│ Phase 3: Resolve default model from registry              │
+│ Phase 4: llmagent.New() — build ADK agent with tools      │
+└───────────────────────────────────────────────────────────┘
+```
+
+**Phase 1** fails fast if the *default* model can't connect. Non-default failures produce warnings (graceful degradation).
+
+**Phase 2** validates env vars (`checkSkillEnv`) before connecting, and eagerly calls `Tools()` so errors surface at startup rather than on the first user message.
+
+## Two-Layer Configuration
 
 | Layer | File | Set by | Contains |
 |---|---|---|---|
-| **Agentfile** | `Agentfile` | Developer | Models, persona, skills, tuning params |
+| **Agentfile** | `Agentfile` | Developer | Models, persona, skills, tuning |
 | **Runtime config** | `.crate/runtime.json` | `crate build` | API endpoints, auth env vars, host overrides |
 
-The Agentfile defines *what* the agent is. The runtime config defines *how* to connect. This separation allows the same Agentfile to run against different backends (cloud, local, staging) without modification.
-
-### API Base URL Resolution
-
-For each model, the base URL resolves in priority order:
+API base URL resolution priority:
 
 1. **Runtime env var** (`host_env_var`, e.g., `OLLAMA_HOST`) — deploy-time override
 2. **Build-time config** (`api_base` from `runtime.json`)
 3. **Provider default** (e.g., `https://api.openai.com/v1`)
 
-### Model Middleware Chain
+## Provider Registration
 
-Every model is wrapped in a middleware chain:
+Providers self-register via `init()` side-effect imports:
 
-```text
-Rate Limiter → Logger → Provider Model
+```mermaid
+graph LR
+  Main["cmd/crated/main.go"] -->|"import _"| OAI["providers/openai"]
+  Main -->|"import _"| ANT["providers/anthropic"]
+  Main -->|"import _"| GEM["providers/gemini"]
+  OAI -->|"init()"| Reg["runtime.RegisterProvider()"]
+  ANT -->|"init()"| Reg
+  GEM -->|"init()"| Reg
 ```
 
-- **Rate Limiter**: Semaphore-based per-model concurrency cap (default: 10)
-- **Logger**: Structured `slog` output with token counts, tool calls, and duration
+Each model is wrapped in a middleware chain: `Rate Limiter → Logger → Provider LLM`.
 
-### Graceful Degradation
-
-When initializing models, the **default** model failure is fatal. Non-default model failures produce warnings but don't block startup. This allows agents to start even if an optional model (e.g., a specialized summarizer) is temporarily unavailable.
-
-### Frontend Architecture
-
-Frontends implement a simple interface:
-
-```go
-type Frontend interface {
-    Name() string
-    Run(ctx context.Context, bridge *AgentBridge) error
-}
-```
-
-The `AgentBridge` wraps the ADK runner and session management, so frontends never deal with ADK internals. Current implementations: `repl` (console), `playground` (web UI).
-
-### Signal Handling
+## Signal Handling
 
 | Signal | Behavior |
 |---|---|
-| `SIGINT` / `SIGTERM` (first) | Graceful shutdown: close skills, drain connections |
-| `SIGINT` / `SIGTERM` (second) | Force exit |
+| `SIGINT` / `SIGTERM` (1st) | Graceful shutdown: close skills, drain connections |
+| `SIGINT` / `SIGTERM` (2nd) | Force exit |
 | `SIGHUP` | Hot-reload: re-parse Agentfile, rebuild agent with new persona/brain, keep skill connections alive |
 
-### Health Probes
+## Health Probes
 
 | Endpoint | Type | Returns 200 |
 |---|---|---|
@@ -125,41 +118,35 @@ The `AgentBridge` wraps the ADK runner and session management, so frontends neve
 | `GET /readyz` | Readiness | After models + skills initialized |
 | `GET /metrics` | Diagnostics | Always (uptime, heap, goroutines, GC) |
 
-### Logging
-
-`slog` throughout with auto-format detection:
-
-- **Text format**: when stdout is a TTY (REPL mode)
-- **JSON format**: when stdout is not a TTY (container/service mode)
-
-Per-component loggers via `slog.With("component", "...")` for filtering.
-
-## Container Architecture
-
-The Dockerfile produces a multi-stage, multi-arch base image:
+## Container Image
 
 ```text
-Stage 1 (builder): golang:1.25-alpine → compile crated binary
-Stage 2 (runtime): alpine:3.21 → crated + Node.js (npx) + Python (uvx)
+Stage 1 (builder):  golang:1.25-alpine → compile crated binary
+Stage 2 (runtime):  alpine:3.21 → crated + Node.js (npx) + Python (uvx)
 ```
 
-Key decisions:
-- **tini** as PID 1 for proper signal forwarding
-- **Non-root `agent` user** for security
-- **Node.js + Python** pre-installed for stdio MCP tools (npx/uvx)
-- **HEALTHCHECK** directive for Docker Compose compatibility
+| Decision | Rationale |
+|---|---|
+| **tini** as PID 1 | Proper signal forwarding to Go process |
+| Non-root `agent` user | Container security best practice |
+| Node.js + Python | Pre-installed for stdio MCP tools (npx/uvx) |
+| `HEALTHCHECK` directive | Docker Compose compatibility |
+| Multi-arch (amd64+arm64) | Support for cloud and Apple Silicon |
 
-## Adding a New Provider
+## Dependencies
 
-1. Create `internal/runtime/providers/yourprovider/yourprovider.go`
-2. Implement `runtime.ModelProvider` interface
-3. Call `runtime.RegisterProvider()` in `init()`
-4. Add side-effect import to `cmd/crated/main.go`
-5. Add scope `yourprovider` to `.github/workflows/pr-title.yml`
+| Dependency | Purpose |
+|---|---|
+| `google.golang.org/adk` | ADK agent framework, runner, session, tool interfaces |
+| `google.golang.org/genai` | GenAI types (Content, Part, FunctionCall) |
+| `github.com/modelcontextprotocol/go-sdk/mcp` | MCP client transports (stdio, HTTP, SSE) |
+| `github.com/agentcrate/agentfile` | Agentfile parsing and types |
 
-## Adding a New Frontend
+## Testing Strategy
 
-1. Create `internal/frontend/yourfrontend/yourfrontend.go`
-2. Implement `frontend.Frontend` interface
-3. Call `frontend.RegisterFrontend()` in `init()`
-4. Add side-effect import to `cmd/crated/main.go`
+- **White-box** (`package runtime`): internal function access for provider registry, skill connect, reload
+- **httptest-driven**: OpenAI and Anthropic providers test against mock HTTP servers
+- **Stub LLM pattern**: `stubModel` / `stubProvider` for testing without real API calls
+- **Registry isolation**: `saveAndRestoreProviders(t)` snapshots and restores the global registry per test
+- **Coverage targets**: 80% patch coverage enforced via Codecov; `cmd/crated/main.go` excluded
+- **CI**: tests on Linux + macOS matrix, golangci-lint, govulncheck, markdown lint
