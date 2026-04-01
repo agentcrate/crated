@@ -15,3 +15,6 @@ MD036: false
 
 # Allow bare URLs for email addresses
 MD034: false
+
+# Allow mixed table column spacing styles
+MD060: false
