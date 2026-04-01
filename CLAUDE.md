@@ -19,7 +19,7 @@ Never run `go test` directly — always use `make`.
 
 ## Architecture
 
-```
+```text
 cmd/crated/main.go           Entrypoint, signal handling, provider imports
 
 internal/
@@ -44,7 +44,7 @@ internal/
 
 ## Startup Pipeline
 
-```
+```text
 Health server → Parse Agentfile → Resolve profile → Load runtime.json
   → Init providers → Connect skills (MCP) → Build ADK agent
   → MarkReady() → Start frontend
