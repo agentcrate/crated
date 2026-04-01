@@ -37,6 +37,11 @@ coverage:
 clean:
 	@rm -rf bin/ dist/
 
+.PHONY: setup
+setup: ## Install pre-commit hooks
+	@pre-commit install
+	@echo "pre-commit hooks installed"
+
 ## help: Show this help message
 help:
 	@echo "Available targets:"
