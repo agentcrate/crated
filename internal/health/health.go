@@ -152,6 +152,8 @@ type metricsResponse struct {
 	GCCycles    uint32  `json:"gc_cycles"`
 }
 
+// NOTE: The health server should be bound to localhost or an internal network.
+// Do not expose the health port externally without authentication.
 func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)

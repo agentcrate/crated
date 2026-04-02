@@ -14,6 +14,8 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/adk/agent"
@@ -30,14 +32,15 @@ import (
 // Runtime is the agent execution engine. It owns the model connection,
 // MCP skill connections, and the ADK agent that orchestrates them.
 type Runtime struct {
-	af       *agentfile.Agentfile
-	rc       *runtimecfg.Config
-	agent    agent.Agent
-	models   *ModelRegistry
-	toolsets []tool.Toolset
-	closers  []func() // cleanup functions for stdio processes, etc.
-	logger   *slog.Logger
-	mu       sync.RWMutex // protects agent for hot-reload
+	af        *agentfile.Agentfile
+	rc        *runtimecfg.Config
+	agent     agent.Agent
+	models    *ModelRegistry
+	toolsets  []tool.Toolset
+	closers   []func() // cleanup functions for stdio processes, etc.
+	logger    *slog.Logger
+	mu        sync.RWMutex // protects agent and af for hot-reload
+	closeOnce sync.Once
 }
 
 // New creates a Runtime from a parsed Agentfile and optional runtime config.
@@ -136,7 +139,10 @@ func (r *Runtime) Agent() agent.Agent {
 }
 
 // Agentfile returns the runtime's Agentfile.
+// Safe for concurrent use during hot-reload.
 func (r *Runtime) Agentfile() *agentfile.Agentfile {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.af
 }
 
@@ -189,11 +195,14 @@ func (r *Runtime) Reload(ctx context.Context, newAF *agentfile.Agentfile) error 
 }
 
 // Close shuts down all skill connections and subprocess handles.
+// Safe for concurrent use; subsequent calls are no-ops.
 func (r *Runtime) Close() {
-	for _, fn := range r.closers {
-		fn()
-	}
-	r.closers = nil
+	r.closeOnce.Do(func() {
+		for _, fn := range r.closers {
+			fn()
+		}
+		r.closers = nil
+	})
 }
 
 // connectSkill creates an MCP toolset for a single skill based on its type.
@@ -205,11 +214,21 @@ func connectSkill(ctx context.Context, skill *agentfile.Skill) (tool.Toolset, fu
 	switch skill.Type {
 	case "stdio":
 		// Launch the tool as a subprocess and communicate over stdin/stdout.
+		// Resource limits for skill subprocesses are enforced at the container level via cgroup limits, not at the process level.
 		cmd := exec.CommandContext(ctx, skill.Command, skill.Args...)
 		transport = &mcp.CommandTransport{Command: cmd}
-		// Return a closer that kills the subprocess on shutdown.
+		// Return a closer that gracefully shuts down the subprocess.
 		closer = func() {
-			if cmd.Process != nil {
+			if cmd.Process == nil {
+				return
+			}
+			// Send SIGTERM for graceful shutdown, then SIGKILL after timeout.
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+			done := make(chan error, 1)
+			go func() { done <- cmd.Wait() }()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
 				_ = cmd.Process.Kill()
 			}
 		}

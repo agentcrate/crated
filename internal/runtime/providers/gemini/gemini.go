@@ -8,6 +8,7 @@ package gemini
 import (
 	"context"
 	"fmt"
+	"iter"
 	"log/slog"
 	"os"
 
@@ -61,6 +62,8 @@ func (p *provider) CreateModel(ctx context.Context, modelID string, cc runtime.C
 	}
 
 	// Apply Agentfile tuning params via generation config.
+	// The ADK gemini.NewModel doesn't accept generation config at creation time,
+	// so we wrap the model to merge config into each LLMRequest at generation time.
 	if mc.Temperature != nil || mc.MaxTokens != nil || mc.TopP != nil {
 		genCfg := &genai.GenerateContentConfig{}
 		if mc.Temperature != nil {
@@ -81,9 +84,40 @@ func (p *provider) CreateModel(ctx context.Context, modelID string, cc runtime.C
 			"max_tokens", mc.MaxTokens,
 			"top_p", mc.TopP,
 		)
+		return &configuredModel{inner: m, config: genCfg}, nil
 	}
 
 	return m, nil
+}
+
+// configuredModel wraps a Gemini model.LLM to inject generation config
+// into each request. This is necessary because gemini.NewModel does not
+// accept GenerateContentConfig at creation time.
+type configuredModel struct {
+	inner  model.LLM
+	config *genai.GenerateContentConfig
+}
+
+//nolint:revive // implements model.LLM interface.
+func (cm *configuredModel) Name() string { return cm.inner.Name() }
+
+//nolint:revive // implements model.LLM interface.
+func (cm *configuredModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	// Merge tuning config into the request config.
+	if req.Config == nil {
+		req.Config = cm.config
+	} else {
+		if cm.config.Temperature != nil && req.Config.Temperature == nil {
+			req.Config.Temperature = cm.config.Temperature
+		}
+		if cm.config.MaxOutputTokens != 0 && req.Config.MaxOutputTokens == 0 {
+			req.Config.MaxOutputTokens = cm.config.MaxOutputTokens
+		}
+		if cm.config.TopP != nil && req.Config.TopP == nil {
+			req.Config.TopP = cm.config.TopP
+		}
+	}
+	return cm.inner.GenerateContent(ctx, req, stream)
 }
 
 // alias registers an alternative name for a provider (e.g., "google" → "gemini").

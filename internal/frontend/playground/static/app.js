@@ -332,7 +332,9 @@
     // ── Markdown (basic) ─────────────────────────────────────────────
 
     function renderMarkdown(text) {
-        return text
+        // Escape HTML first to prevent XSS, then apply markdown formatting.
+        const escaped = escapeHtml(text);
+        return sanitizeHtml(escaped
             .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -341,7 +343,14 @@
             .replace(/\n/g, '<br>')
             .replace(/^/, '<p>')
             .replace(/$/, '</p>')
-            .replace(/<p><\/p>/g, '');
+            .replace(/<p><\/p>/g, ''));
+    }
+
+    function sanitizeHtml(html) {
+        // Strip script tags and event handlers from rendered HTML.
+        return html
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '');
     }
 
     function escapeHtml(text) {

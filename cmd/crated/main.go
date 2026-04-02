@@ -46,6 +46,7 @@ import (
 // version is set at build time via -ldflags.
 var version = "dev"
 
+// TODO: Extract run() into a testable function with injected dependencies.
 func main() {
 	agentfilePath := flag.String("agentfile", "Agentfile", "Path to the Agentfile")
 	profileFlag := flag.String("profile", "", "Environment profile to activate (overrides CRATE_PROFILE)")

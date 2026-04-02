@@ -238,11 +238,9 @@ func TestNewModelRegistry_DefaultModelFails(t *testing.T) {
 func TestNewModelRegistry_NonDefaultModelFails_GracefulDegradation(t *testing.T) {
 	saveAndRestoreProviders(t)
 
-	callNum := 0
 	sp := &stubProvider{name: "test"}
 	// Override CreateModel to fail on the second model.
-	origCreate := sp.CreateModel
-	_ = origCreate // just to use it
+	_ = sp // original stub unused; failSecondProvider handles the behavior
 
 	// We need a custom provider that fails for non-default.
 	if err := RegisterProvider(&failSecondProvider{name: "test"}); err != nil {
@@ -272,7 +270,6 @@ func TestNewModelRegistry_NonDefaultModelFails_GracefulDegradation(t *testing.T)
 		t.Fatal("expected optional model to be absent")
 	}
 
-	_ = callNum
 }
 
 type failSecondProvider struct {

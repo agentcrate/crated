@@ -33,6 +33,7 @@ const (
 	defaultBaseURL   = "https://api.anthropic.com/v1"
 	defaultAPIKeyEnv = "ANTHROPIC_API_KEY"
 	apiVersion       = "2023-06-01"
+	defaultMaxTokens = 4096 // Anthropic API default
 )
 
 func init() {
@@ -75,7 +76,6 @@ func (p *provider) CreateModel(_ context.Context, modelID string, cc runtime.Con
 			Timeout: 120 * time.Second,
 			Logger:  logger,
 		}),
-		logger: logger,
 	}, nil
 }
 
@@ -85,7 +85,6 @@ type anthropicModel struct {
 	baseURL string
 	config  agentfile.ModelConfig
 	client  *httpclient.Client
-	logger  *slog.Logger
 }
 
 // Name implements model.LLM.
@@ -305,7 +304,7 @@ func (m *anthropicModel) buildRequest(req *model.LLMRequest, stream bool) messag
 	if m.config.MaxTokens != nil {
 		anthropicReq.MaxTokens = *m.config.MaxTokens
 	} else {
-		anthropicReq.MaxTokens = 4096
+		anthropicReq.MaxTokens = defaultMaxTokens
 	}
 
 	if m.config.Temperature != nil {

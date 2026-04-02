@@ -85,7 +85,6 @@ func (p *provider) CreateModel(_ context.Context, modelID string, cc runtime.Con
 			Timeout: 120 * time.Second,
 			Logger:  logger,
 		}),
-		logger: logger,
 	}, nil
 }
 
@@ -95,7 +94,6 @@ type openaiModel struct {
 	baseURL string
 	config  agentfile.ModelConfig
 	client  *httpclient.Client
-	logger  *slog.Logger
 }
 
 // Name implements model.LLM.
@@ -254,7 +252,7 @@ func (m *openaiModel) generateStreaming(ctx context.Context, req *model.LLMReque
 					for _, tc := range toolCalls {
 						var args map[string]any
 						if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
-							m.logger.Warn("malformed tool call arguments", "tool", tc.Name, "error", err)
+							slog.Default().Warn("malformed tool call arguments", "provider", "openai", "model", m.modelID, "tool", tc.Name, "error", err)
 						}
 						content.Parts = append(content.Parts, genai.NewPartFromFunctionCall(tc.Name, args))
 					}
