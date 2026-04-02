@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # Crated — Agent Runtime
 
 Go agent runtime that executes Agentfile-defined agents with multi-provider LLM support, MCP skills, and pluggable frontends. Runs inside Docker containers.
