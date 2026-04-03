@@ -31,7 +31,7 @@ var exitCommands = map[string]bool{
 
 func init() {
 	if err := frontend.RegisterFrontend(&replFrontend{}); err != nil {
-		slog.Default().Error("registering repl frontend", "error", err)
+		panic(fmt.Sprintf("registering repl frontend: %v", err))
 	}
 }
 

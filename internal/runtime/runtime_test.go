@@ -206,6 +206,72 @@ func TestInit_WithModelWarnings(t *testing.T) {
 	}
 }
 
+func TestRuntime_Close_ConcurrentSafe(t *testing.T) {
+	af := &agentfile.Agentfile{}
+	rt := New(af, nil)
+
+	called := 0
+	rt.closers = append(rt.closers, func() { called++ })
+
+	// Call Close concurrently — should not panic or double-call closers.
+	done := make(chan struct{}, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			rt.Close()
+			done <- struct{}{}
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+	if called != 1 {
+		t.Errorf("expected closers called exactly once, got %d", called)
+	}
+}
+
+func TestRuntime_Agentfile_SafeDuringReload(t *testing.T) {
+	saveAndRestoreProviders(t)
+
+	sp := &stubProvider{name: "test", model: &stubModel{name: "test/chat"}}
+	RegisterProvider(sp)
+
+	af := &agentfile.Agentfile{
+		Metadata: agentfile.Metadata{Name: "orig", Description: "Orig"},
+		Brain: agentfile.Brain{
+			Default: "main",
+			Models:  []agentfile.ModelConfig{{Name: "main", Model: "test/chat"}},
+		},
+		Persona: agentfile.Persona{SystemPrompt: "Orig"},
+	}
+	rt := New(af, nil)
+	if err := rt.Init(context.Background()); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	defer rt.Close()
+
+	// Reading Agentfile concurrently with reload should not panic.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 100; i++ {
+			_ = rt.Agentfile()
+		}
+	}()
+
+	newAF := &agentfile.Agentfile{
+		Metadata: agentfile.Metadata{Name: "new", Description: "New"},
+		Brain: agentfile.Brain{
+			Default: "main",
+			Models:  []agentfile.ModelConfig{{Name: "main", Model: "test/chat"}},
+		},
+		Persona: agentfile.Persona{SystemPrompt: "New"},
+	}
+	for i := 0; i < 10; i++ {
+		_ = rt.Reload(context.Background(), newAF)
+	}
+	<-done
+}
+
 // --- checkSkillEnv Tests ---
 
 func TestCheckSkillEnv_NoEnvVars(t *testing.T) {

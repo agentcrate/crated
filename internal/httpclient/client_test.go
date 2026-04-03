@@ -243,3 +243,90 @@ func TestDo_NetworkError_RetriesAndFails(t *testing.T) {
 		t.Errorf("expected 'failed after' in error message, got: %v", err)
 	}
 }
+
+func TestDo_RetryWithBody(t *testing.T) {
+	// Verify that request body is replayed on retries.
+	var bodies []string
+	var calls atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(body))
+		if n <= 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	client := httpclient.New(httpclient.Options{MaxRetries: 2})
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.URL,
+		strings.NewReader("hello body"))
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if got := calls.Load(); got != 2 {
+		t.Errorf("expected 2 calls, got %d", got)
+	}
+	// Both requests should have received the same body.
+	for i, b := range bodies {
+		if b != "hello body" {
+			t.Errorf("call %d: expected body 'hello body', got %q", i, b)
+		}
+	}
+}
+
+func TestDo_DisableRetriesWithNegativeOne(t *testing.T) {
+	var calls atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("unavailable"))
+	}))
+	defer ts.Close()
+
+	// MaxRetries=-1 should disable retries (0 retries after the initial attempt).
+	client := httpclient.New(httpclient.Options{MaxRetries: -1})
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL, nil)
+	_, err := client.Do(req)
+	// With retries disabled and a retryable status, we get an error after 1 attempt.
+	if err == nil {
+		t.Fatal("expected error after exhausting retries")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("expected 1 call with retries disabled, got %d", got)
+	}
+}
+
+func TestDoStream_ConcurrentSafe(t *testing.T) {
+	// Verify that concurrent DoStream calls don't race on streamClient init.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: hello\n\n"))
+	}))
+	defer ts.Close()
+
+	client := httpclient.New(httpclient.Options{})
+	done := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL, nil)
+			resp, err := client.DoStream(req)
+			if err != nil {
+				done <- err
+				return
+			}
+			_ = resp.Body.Close()
+			done <- nil
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		if err := <-done; err != nil {
+			t.Errorf("concurrent DoStream failed: %v", err)
+		}
+	}
+}

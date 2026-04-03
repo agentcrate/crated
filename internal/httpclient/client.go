@@ -13,12 +13,14 @@
 package httpclient
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
 	"math"
 	"math/rand/v2"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -27,6 +29,11 @@ const (
 	DefaultTimeout     = 120 * time.Second
 	DefaultMaxBodySize = 10 << 20 // 10 MB
 	DefaultMaxRetries  = 3
+
+	// Backoff parameters for retry delays.
+	baseBackoff    = 500 * time.Millisecond
+	maxBackoff     = 30 * time.Second
+	jitterFraction = 0.25
 )
 
 // retryableStatusCodes are HTTP status codes that warrant a retry.
@@ -48,7 +55,7 @@ type Options struct {
 	MaxBodySize int64
 
 	// MaxRetries is the number of retry attempts for transient errors (default: 3).
-	// Set to 0 to disable retries.
+	// MaxRetries of 0 defaults to DefaultMaxRetries (3). Use -1 to disable retries.
 	MaxRetries int
 
 	// Logger is the structured logger for request/error logging.
@@ -64,8 +71,10 @@ func (o *Options) withDefaults() Options {
 	if out.MaxBodySize == 0 {
 		out.MaxBodySize = DefaultMaxBodySize
 	}
-	if out.MaxRetries == 0 && o.MaxRetries == 0 {
+	if out.MaxRetries == 0 {
 		out.MaxRetries = DefaultMaxRetries
+	} else if out.MaxRetries < 0 {
+		out.MaxRetries = 0
 	}
 	if out.Logger == nil {
 		out.Logger = slog.Default()
@@ -77,6 +86,7 @@ func (o *Options) withDefaults() Options {
 type Client struct {
 	http         *http.Client
 	streamClient *http.Client // lazily initialized for streaming requests
+	streamOnce   sync.Once
 	opts         Options
 	logger       *slog.Logger
 }
@@ -96,6 +106,21 @@ func New(opts Options) *Client {
 // Do executes an HTTP request with retries for transient failures.
 // The caller is responsible for closing the response body.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	// Buffer the request body so it can be replayed on retries.
+	var bodyBytes []byte
+	if req.Body != nil && req.GetBody == nil && c.opts.MaxRetries > 0 {
+		var err error
+		bodyBytes, err = io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("buffering request body for retries: %w", err)
+		}
+		_ = req.Body.Close()
+		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+		}
+	}
+
 	var lastErr error
 	var lastResp *http.Response
 
@@ -115,6 +140,15 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 				timer.Stop()
 				return nil, req.Context().Err()
 			case <-timer.C:
+			}
+
+			// Reset the body for the retry.
+			if req.GetBody != nil {
+				body, err := req.GetBody()
+				if err != nil {
+					return nil, fmt.Errorf("resetting request body for retry: %w", err)
+				}
+				req.Body = body
 			}
 		}
 
@@ -163,11 +197,11 @@ func (c *Client) ReadBody(resp *http.Response) ([]byte, error) {
 // The caller MUST close resp.Body when done.
 func (c *Client) DoStream(req *http.Request) (*http.Response, error) {
 	// Use the client's transport but without timeout for streaming.
-	if c.streamClient == nil {
+	c.streamOnce.Do(func() {
 		c.streamClient = &http.Client{
 			Transport: c.http.Transport,
 		}
-	}
+	})
 	resp, err := c.streamClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -184,16 +218,12 @@ func (c *Client) DoStream(req *http.Request) (*http.Response, error) {
 }
 
 // backoff calculates exponential backoff with jitter.
-// Base: 500ms, max: 30s.
 func backoff(attempt int) time.Duration {
-	base := 500 * time.Millisecond
-	maxDelay := 30 * time.Second
-
-	delay := time.Duration(float64(base) * math.Pow(2, float64(attempt-1)))
-	if delay > maxDelay {
-		delay = maxDelay
+	delay := time.Duration(float64(baseBackoff) * math.Pow(2, float64(attempt-1)))
+	if delay > maxBackoff {
+		delay = maxBackoff
 	}
 	// Add jitter: ±25%
-	jitter := time.Duration(rand.Int64N(int64(delay)/2)) - delay/4
+	jitter := time.Duration(rand.Int64N(int64(float64(delay)*jitterFraction*2))) - time.Duration(float64(delay)*jitterFraction)
 	return delay + jitter
 }
