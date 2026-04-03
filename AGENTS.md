@@ -21,6 +21,7 @@ If any preflight check fails, fix it before starting new work.
 ## Repository Context
 
 This agent's behavior is governed by the conventions in `CLAUDE.md`. Read it before every task. Key points:
+
 - All commands go through `make` — never run `go test` directly
 - API keys sourced from env vars only — never from Agentfile or runtime.json
 - New providers must register via `init()` + side-effect import in `cmd/crated/main.go`
