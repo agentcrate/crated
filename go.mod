@@ -6,7 +6,7 @@ require (
 	github.com/agentcrate/agentfile v1.1.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	google.golang.org/adk v1.0.0
+	google.golang.org/adk v1.1.0
 	google.golang.org/genai v1.52.1
 )
 
