@@ -1,0 +1,24 @@
+name: Approval Policy
+on:
+  pull_request_review:
+    types: [submitted]
+permissions:
+  pull-requests: write
+jobs:
+  dismiss-bot-approval-on-non-owner-pr:
+    if: |
+      github.event.review.state == 'approved' &&
+      github.event.review.user.login == 'claude[bot]' &&
+      github.event.pull_request.user.login != 'MauroKinderknecht'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.dismissReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              review_id: context.payload.review.id,
+              message: 'Per repo policy, Claude approval does not satisfy the approving review requirement on PRs not authored by MauroKinderknecht. A human reviewer is required.'
+            });

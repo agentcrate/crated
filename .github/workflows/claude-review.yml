@@ -1,0 +1,36 @@
+name: Claude Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this pull request thoroughly. Check for:
+            - Correctness bugs that would break behavior
+            - Security issues (injection, secret leakage, auth bypass)
+            - Logic errors, off-by-one, race conditions
+            - Edge cases the author may have missed
+            - Test coverage on critical paths
+
+            Post inline review comments on the specific lines where issues exist.
+            Skip pure-style nits unless they hide a real bug.
+
+            If the PR looks good with no important findings, issue a formal APPROVE review.
+            If you found bugs that should block merge, issue REQUEST_CHANGES.
+            If you found nits or suggestions but nothing blocking, leave inline comments without formal approval.
+          claude_args: "--max-turns 5"
