@@ -12,6 +12,8 @@ updates:
       - "go"
     commit-message:
       prefix: "chore(deps):"
+    reviewers:
+      - "MauroKinderknecht"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -24,3 +26,5 @@ updates:
       - "ci"
     commit-message:
       prefix: "chore(ci):"
+    reviewers:
+      - "MauroKinderknecht"
